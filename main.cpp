@@ -4,6 +4,7 @@
 #include <time.h>
 #include <list>
 #include <argtable2.h>
+#include <errno.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_image.h>
@@ -31,8 +32,10 @@ const uint32_t amask = 0xff000000;
 class Image : public Atlas::NodeRect {
 public:
 
-  Image(SDL_Surface *surface) : NodeRect(surface->w, surface->h) {
+  Image(const char *name, SDL_Surface *surface) 
+    : NodeRect(surface->w, surface->h) {
     mSurface = surface;
+    strcpy(mName, name);
   }
 
   SDL_Surface *getSurface() {
@@ -49,9 +52,13 @@ public:
     }
   }
 
+  const char *getName() {
+    return mName;
+  }
 
 private:
   SDL_Surface *mSurface;
+  char mName[512];
 };
 
 
@@ -69,6 +76,31 @@ static void drawNode(int level, Atlas::Node *node, void *param)
   rect.h = node->getHeight();
 
   SDL_BlitSurface(image->getSurface(), NULL, surface, &rect);
+}
+
+
+static void storeIndex(int level, Atlas::Node *node, void *param)
+{
+  FILE *file = (FILE *)param;
+  Image *image = (Image *)node->getRect();
+
+  //  printf("Storeing node %s...\n", image->getName());
+
+  char *tmpbuf = new char[8*1024];
+  
+  sprintf(tmpbuf,
+	  "/*\n"
+	  " * %s\n"
+	  " */\n"
+	  "{\n"
+	  "  \"%s\",\n"
+	  "  %d, %d, %d, %d\n"
+	  "},\n\n", 
+	  image->getName(), image->getName(), 
+	  node->getLeft(), node->getTop(), 
+	  node->getRight(), node->getBottom());
+	  
+  fprintf(file, "%s", tmpbuf);
 }
 
 
@@ -172,7 +204,7 @@ static int cmdLineParse(int argc, char *argv[],
     for (i = 0; i < infile->count; i ++) {
       SDL_Surface *surface = IMG_Load(infile->filename[i]);
       if (surface) {
-	imageList->push_back(new Image(surface));
+	imageList->push_back(new Image(infile->basename[i], surface));
       }
       else {
 	printf("Error loading image %s\n", infile->filename[i]);
@@ -276,28 +308,46 @@ int main(int argc, char *argv[])
 	    bestRatio = ratio;
 	  }
 	}
+      }
+    }
+    if (bestRoot) {
 
-
-	if (bestRoot) {
-
-	  /* 
-	   * Create the final image
-	   */
+      /* 
+       * Create the final image
+       */
 	  
-	  SDL_Surface *surface = SDL_CreateRGBSurface (0, bestDimension->mWidth, 
-						       bestDimension->mHeight, 
-						       32,
-						       rmask, gmask, bmask, amask);
-	  SDL_FillRect(surface, NULL, 0xffffffff);
-	  bestRoot->poTraversal(0, drawNode, surface);
-	  char pngname[sizeof(atlasname)+4];
-	  sprintf(pngname, "%s.png", atlasname);
-	  PNG::save(surface, pngname);
+      SDL_Surface *surface = SDL_CreateRGBSurface (0, bestDimension->mWidth, 
+						   bestDimension->mHeight, 
+						   32,
+						   rmask, gmask, bmask, amask);
+      SDL_FillRect(surface, NULL, 0xffffffff);
+      bestRoot->poTraversal(0, drawNode, surface);
+      char tmpname[sizeof(atlasname)+4];
+      sprintf(tmpname, "%s.png", atlasname);
+      err = PNG::save(surface, tmpname);
+      if (!err) {
+	    
+
+	printf("Successfully created atlas image file (%s)\n", tmpname);
+	  
+	/* Create the atlas index file */
+	sprintf(tmpname, "%s.index", atlasname);
+	FILE *indexfile = fopen(tmpname, "wb");
+	    
+	if (indexfile) {
+	  bestRoot->poTraversal(0, storeIndex, indexfile);
+	  fclose(indexfile);
+	  printf("Successfully created atlas index file (%s)\n", tmpname);
+	}
+	else {
+	  printf("Failed to create index file (%s): %s\n", 
+		 tmpname, strerror(errno));
+	  err = -1;
 	}
       }
     }
   }
 
-  return 0;
+  return err;
 }
 
