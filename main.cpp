@@ -29,14 +29,8 @@ const uint32_t amask = 0xff000000;
 class Image : public Atlas::NodeRect {
 public:
 
-  Image(int w, int h) : NodeRect(w, h) {
-
-  }
-
-
-  Image(SDL_Surface *surface) {
+  Image(SDL_Surface *surface) : NodeRect(surface->w, surface->h) {
     mSurface = surface;
-    setSize(mSurface->w, mSurface->h);
   }
 
   SDL_Surface *getSurface() {
@@ -59,6 +53,9 @@ private:
 };
 
 
+/*
+ * Draw a nodes surface to the atlas surface
+ */
 static void drawNode(int level, Atlas::Node *node, void *param) 
 {  
   SDL_Surface *surface = (SDL_Surface *)param;
@@ -69,39 +66,16 @@ static void drawNode(int level, Atlas::Node *node, void *param)
   rect.w = node->getWidth();
   rect.h = node->getHeight();
 
-
   SDL_BlitSurface(image->getSurface(), NULL, surface, &rect);
-
-  if (image->getWidth() > 3 && image->getHeight() > 3) {
-
-#if 0
-    rect.x = node->getLeft() + 1;
-    rect.y = node->getTop() + 1;
-    rect.w = node->getWidth() - 2;
-    rect.h = node->getHeight() - 2;
-
-    int id = node->getId();
-
-    if (node->isInUse()) {
-      unsigned int color = (0xb0<<24) | (((id * 20) & 0xff) << 16);
-      SDL_FillRect(surface, &rect, color);
-    }
-    else if (node->isLeaf()) {
-      unsigned int color = (0xb0<<24) | (((id * 20) & 0xff) << 8); 
-      SDL_FillRect(surface, &rect, 0xff0000ff); //color);
-    }
-    else {
-
-    }
-#endif
-  }
-
 }
 
 
 
-
-
+/*
+ * Try to fit images in the image list into a rectangle of the given dimension.
+ *
+ * Returns the atlas tree if successfully fitted all, else NULL.
+ */
 static Atlas::Node* tryCreate(int w, int h, std::list<Image *> &imageList)
 {
   std::list<Image *>::iterator it;
@@ -310,97 +284,9 @@ int main(int argc, char *argv[])
 	  bestRoot->poTraversal(0, drawNode, surface);
 	  SDL_SaveBMP(surface, "atlas.bmp");
 	}
-
-      }
-    }
-
-  }
-
-
-#if 0
-
-  
-  /* 
-   * Read images and push them to list, then sort list in width
-   */
-
-  unsigned long long numPixels = 0;
-
-  for (int i = 0; i < 52; i ++) {
-    int h = (rand()%16 + 1)*4 - 1;
-    int w = h * (rand()%8+1);
-    imageList.push_back(new Image(w, h));
-    numPixels += w * h;
-  }
-
-  imageList.sort(Image::compare);
-
-
-
-  /*
-   * Try to fit all images in the list surfaces with different 
-   * resolutions, then choose to use the tree with the least waste 
-   * of unused pixels.
-   *
-   * If there are more than one surface with the same amount of waste
-   * we use the one with its height/width ratio closest to 1.0.
-   */
-
-  unsigned long long leastWaste = (unsigned long long)-1;
-  Atlas::Node *bestRoot = NULL;
-  Dimension *bestDimension = NULL;
-  double bestRatio = 0.0;
-  
-  for (rit = resolutionList.begin(); rit != resolutionList.end(); rit ++) {
-    Dimension *dim = *rit;
-    
-    Atlas::Node *root = tryCreate(dim->mWidth, dim->mHeight, imageList);
-
-    if (root) {
-      
-      /* Got a tree, compare it to the best so far */
-
-      unsigned long long  pixelWaste = (dim->mWidth * dim->mHeight) - numPixels;
-      double ratio;
-      if (dim->mHeight < dim->mWidth)
-	ratio = (double)dim->mHeight / (double)dim->mWidth;
-      else
-	ratio = (double)dim->mWidth / (double)dim->mHeight;
-
-      printf("Surface with dimension %d x %d created (ratio: %f, waste: %llu pixels)\n",
-	     dim->mWidth, dim->mHeight, ratio, pixelWaste);
-
-      if (pixelWaste >= 0) {
-	if ((pixelWaste == leastWaste && ratio > bestRatio) || (pixelWaste < leastWaste)) {
-	  printf("Surface with dimension %d x %d best so far\n",
-		 dim->mWidth, dim->mHeight);
-	    
-	  leastWaste = pixelWaste;
-	  bestRoot = root;
-	  bestDimension = dim;
-	  bestRatio = ratio;
-	}
       }
     }
   }
-
-
-  if (bestRoot) {
-
-    /* 
-     * Create the final image
-     */
-
-    SDL_Surface *surface = SDL_CreateRGBSurface (0, bestDimension->mWidth, 
-						 bestDimension->mHeight, 
-						 32,
-						 rmask, gmask, bmask, amask);
-    SDL_FillRect(surface, NULL, 0xffffffff);
-    bestRoot->poTraversal(0, drawNode, surface);
-    SDL_SaveBMP(surface, "atlas.bmp");
-  }
-
-#endif
 
   return 0;
 }
