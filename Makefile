@@ -14,6 +14,7 @@ INSTALL_PATH = /usr/local
 # List of source files which belongs to project
 SOURCES = main.cpp \
           Atlas.cpp \
+          savepng.cpp \
 
 
 

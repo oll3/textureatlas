@@ -3,14 +3,21 @@
 
 #include <SDL/SDL.h>
 
-/*
- * png_save()
- * 
- * Save a SDL Surface as a png image file.
- * Returns 0 if successfully saved, else error.
- */
-int png_save(SDL_Surface *surf, const char *name);
 
+
+class PNG {
+
+ public:
+
+  /*
+   * save()
+   * 
+   * Save a SDL Surface as a png image file.
+   * Returns 0 if successfully saved, else error.
+   */
+  static int save(SDL_Surface *surf, const char *filename);
+
+};
 
 #endif
 

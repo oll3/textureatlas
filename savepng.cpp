@@ -4,6 +4,7 @@
 #include <SDL/SDL_image.h>
 #include <png.h>
 
+#include "savepng.h"
 
 static int png_colortype_from_surface(SDL_Surface *surface)
 {
@@ -37,7 +38,7 @@ void png_user_error(png_structp ctx, png_const_charp str)
  * Save a SDL Surface as a png image file.
  * Returns 0 if successfully saved, else error.
  */
-int png_save(SDL_Surface *surf, const char *filename)
+int PNG::save(SDL_Surface *surf, const char *filename)
 {
   FILE *fp;
   png_structp png_ptr;

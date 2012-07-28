@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <list>
 #include <argtable2.h>
@@ -8,6 +9,7 @@
 #include <SDL/SDL_image.h>
 
 #include "Atlas.h"
+#include "savepng.h"
 
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
@@ -117,7 +119,7 @@ public:
 
 static int cmdLineParse(int argc, char *argv[], 
 			std::list<Image *> *imageList, 
-			const char *filename)
+			char *atlasname)
 {
   int err = 0;
 
@@ -162,6 +164,11 @@ static int cmdLineParse(int argc, char *argv[],
 
     /* No errors parsing command line */
     int i;
+
+    if (outname->count > 0) {
+      strcpy(atlasname, outname->sval[0]);
+    }
+
     for (i = 0; i < infile->count; i ++) {
       SDL_Surface *surface = IMG_Load(infile->filename[i]);
       if (surface) {
@@ -196,9 +203,10 @@ int main(int argc, char *argv[])
   std::list<Dimension *> resolutionList;
   std::list<Dimension *>::iterator rit;
 
-  char outname[512];
+  /* Default atlas name */
+  char atlasname[512] = "unnamed_atlas";
 
-  err = cmdLineParse(argc, argv, &imageList, outname);
+  err = cmdLineParse(argc, argv, &imageList, atlasname);
 
   if (!err) {
 
@@ -282,7 +290,9 @@ int main(int argc, char *argv[])
 						       rmask, gmask, bmask, amask);
 	  SDL_FillRect(surface, NULL, 0xffffffff);
 	  bestRoot->poTraversal(0, drawNode, surface);
-	  SDL_SaveBMP(surface, "atlas.bmp");
+	  char pngname[sizeof(atlasname)+4];
+	  sprintf(pngname, "%s.png", atlasname);
+	  PNG::save(surface, pngname);
 	}
       }
     }
