@@ -19,7 +19,7 @@ SOURCES = main.cpp \
 
 
 # List of needed libraries
-LIBS = -lSDL -lSDL_image -largtable2 -lpng
+LIBS = -lSDL2 -lSDL2_image -largtable2 -lpng
 
 
 

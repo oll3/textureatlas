@@ -1,7 +1,7 @@
 #ifndef _SAVEPNG_H_
 #define _SAVEPNG_H_
 
-#include <SDL/SDL.h>
+#include <SDL2/SDL.h>
 
 
 
