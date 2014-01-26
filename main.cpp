@@ -85,22 +85,24 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
   Image *image = (Image *)node->getRect();
 
   //  printf("Storeing node %s...\n", image->getName());
+  int len = strlen(image->getName());
+  char tmpName[256];
+  const char *endOfName = strrchr(image->getName(), '.');
+  if (endOfName) {
+     len = endOfName - image->getName();
+  }
 
-  char *tmpbuf = new char[8*1024];
+  if (len >= sizeof(tmpName)) {
+    len = sizeof(tmpName) - 1;
+  }
   
-  sprintf(tmpbuf,
-	  "/*\n"
-	  " * %s\n"
-	  " */\n"
-	  "{\n"
-	  "  \"%s\",\n"
-	  "  %d, %d, %d, %d\n"
-	  "},\n\n", 
-	  image->getName(), image->getName(), 
+  memcpy(tmpName, image->getName(), len);
+  tmpName[len] = '\0';
+
+  fprintf(file, "%s={%d,%d,%d,%d};\n",
+	  tmpName, 
 	  node->getLeft(), node->getTop(), 
 	  node->getRight(), node->getBottom());
-	  
-  fprintf(file, "%s", tmpbuf);
 }
 
 
