@@ -130,8 +130,7 @@ static int add_file_footers(struct OutputFiles *outputFiles, const char *atlasNa
 
   fprintf(outputFiles->cFile, 
 	  "\n"
-	  "}; /* end of namespace %s */\n\n"
-	  "\n", atlasName);
+	  "}; /* end of namespace %s */\n", atlasName);
 
   return 0;
 }
