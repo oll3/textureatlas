@@ -78,10 +78,68 @@ static void drawNode(int level, Atlas::Node *node, void *param)
   SDL_BlitSurface(image->getSurface(), NULL, surface, &rect);
 }
 
+struct OutputFiles {
+  FILE *cFile;
+  FILE *hFile;
+};
+
+
+static void strtoupper(char *destStr, int destStrSize, const char *str)
+{
+  int i = 0;
+  while (str[i] != '\0' && i < (destStrSize - 1)) {
+    destStr[i] = toupper(str[i]);
+    i ++;
+  }
+  destStr[i] = '\0';
+}
+
+static int add_file_headers(struct OutputFiles *outputFiles, const char *atlasName)
+{
+  char tmpStr[256];
+
+  strtoupper(tmpStr, sizeof(tmpStr), atlasName);
+  fprintf(outputFiles->hFile, 
+	  "#ifndef _%s_H_\n"
+	  "#define _%s_H_\n"
+	  "\n\n"
+	  "#include \"SpriteDescriptor.h\"\n"
+	  "namespace %s {\n\n",
+	  tmpStr, tmpStr, atlasName);
+
+  fprintf(outputFiles->cFile, 
+	  "#include \"SpriteDescriptor.h\"\n"
+	  "#include \"%s.h\"\n\n"
+	  "namespace %s {\n\n", 
+	  atlasName, atlasName);
+
+
+  return 0;
+}
+
+static int add_file_footers(struct OutputFiles *outputFiles, const char *atlasName)
+{
+  char tmpStr[256];
+  strtoupper(tmpStr, sizeof(tmpStr), atlasName);
+
+  fprintf(outputFiles->hFile, 
+	  "\n"
+	  "}; /* end of namespace %s */\n\n"
+	  "\n\n#endif\n", atlasName);
+
+
+  fprintf(outputFiles->cFile, 
+	  "\n"
+	  "}; /* end of namespace %s */\n\n"
+	  "\n\n#endif\n", atlasName);
+
+  return 0;
+}
+
 
 static void storeIndex(int level, Atlas::Node *node, void *param)
 {
-  FILE *file = (FILE *)param;
+  struct OutputFiles *outputFiles = (struct OutputFiles *)param;
   Image *image = (Image *)node->getRect();
 
   //  printf("Storeing node %s...\n", image->getName());
@@ -95,14 +153,33 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
   if (len >= sizeof(tmpName)) {
     len = sizeof(tmpName) - 1;
   }
-  
+
   memcpy(tmpName, image->getName(), len);
   tmpName[len] = '\0';
 
+  fprintf(outputFiles->hFile, 
+	  "extern const struct SpriteDescriptor %s;\n", 
+	  tmpName);
+
+  fprintf(outputFiles->cFile, 
+	  "const struct SpriteDescriptor %s = {\n"
+	  "  \"%s\", %d, %d, %d, %d, %d, %d\n"
+	  "};\n",
+	  tmpName, 
+	  tmpName, 
+	  node->getLeft(), 
+	  node->getTop(), 
+	  node->getRight(), 
+	  node->getBottom(),
+	  node->getWidth(),
+	  node->getHeight());
+
+#if 0
   fprintf(file, "%s={%d,%d,%d,%d};\n",
 	  tmpName, 
 	  node->getLeft(), node->getTop(), 
 	  node->getRight(), node->getBottom());
+#endif
 }
 
 
@@ -224,6 +301,7 @@ static int cmdLineParse(int argc, char *argv[],
 }
 
 
+
 int main(int argc, char *argv[])
 {
   int err = 0;
@@ -332,19 +410,64 @@ int main(int argc, char *argv[])
 
 	printf("Successfully created atlas image file (%s)\n", tmpname);
 	  
-	/* Create the atlas index file */
-	sprintf(tmpname, "%s.index", atlasname);
-	FILE *indexfile = fopen(tmpname, "wb");
-	    
-	if (indexfile) {
-	  bestRoot->poTraversal(0, storeIndex, indexfile);
-	  fclose(indexfile);
-	  printf("Successfully created atlas index file (%s)\n", tmpname);
+	/* Create the atlas indexing files (c and header) */
+	FILE *spriteDescriptorFile;
+	struct OutputFiles outputFiles;
+
+	spriteDescriptorFile = fopen("SpriteDescriptor.h", "wb");
+	if (spriteDescriptorFile) {
+	  fprintf(spriteDescriptorFile, 
+		  "#ifndef _SPRITE_DESCRIPTOR_H_\n"
+		  "#define _SPRITE_DESCRIPTOR_H_\n"
+		  "\n\n"
+		  "struct SpriteDescriptor {\n\n"
+		  "  /* Sprite Name (from file) */\n"
+		  "  const char *name;\n\n"
+
+		  "  /* Sprite Coordinates */\n"
+		  "  int left, top, rigth, bottom;\n\n"
+		  "  /* Sprite Size */\n"
+		  "  int width, height;\n"
+		  "};\n\n"
+		  "#endif\n");
+
+	  fclose(spriteDescriptorFile);
 	}
 	else {
+	  printf("Failed to create file (SpriteDescriptor.h): %s\n", 
+		 strerror(errno));
+	}
+
+	sprintf(tmpname, "%s.h", atlasname);
+	outputFiles.hFile = fopen(tmpname, "wb");
+	if (!outputFiles.hFile) {
 	  printf("Failed to create index file (%s): %s\n", 
 		 tmpname, strerror(errno));
 	  err = -1;
+	}
+	else {
+	  sprintf(tmpname, "%s.cpp", atlasname);
+	  outputFiles.cFile = fopen(tmpname, "wb");
+	  if (!outputFiles.cFile) {
+	    printf("Failed to create index file (%s): %s\n", 
+		   tmpname, strerror(errno));
+	    fclose(outputFiles.hFile);
+	    err = -1;
+	  }
+	}
+
+	    
+	if (!err) {
+	  add_file_headers(&outputFiles, atlasname);
+
+	  bestRoot->poTraversal(0, storeIndex, &outputFiles);
+
+	  add_file_footers(&outputFiles, atlasname);
+
+	  fclose(outputFiles.cFile);
+	  fclose(outputFiles.hFile);
+
+	  printf("Successfully created atlas index file (%s)\n", tmpname);
 	}
       }
     }
