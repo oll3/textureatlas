@@ -399,7 +399,7 @@ int main(int argc, char *argv[])
 						   bestDimension->mHeight, 
 						   32,
 						   rmask, gmask, bmask, amask);
-      SDL_FillRect(surface, NULL, 0xffffffff);
+      SDL_FillRect(surface, NULL, SDL_MapRGBA(surface->format, 0xff, 0xff, 0xff, 0x00)); // 0x00ffffff);
       bestRoot->poTraversal(0, drawNode, surface);
       char tmpname[sizeof(atlasname)+4];
       sprintf(tmpname, "%s.png", atlasname);
