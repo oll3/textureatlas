@@ -13,6 +13,8 @@
 #include "savepng.h"
 
 
+//#define USE_CFILE
+
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 const uint32_t rmask = 0xff000000;
 const uint32_t gmask = 0x00ff0000;
@@ -24,6 +26,34 @@ const uint32_t gmask = 0x0000ff00;
 const uint32_t bmask = 0x00ff0000;
 const uint32_t amask = 0xff000000;
 #endif
+
+
+#define SPRITE_DESC_FMT_CFILE						\
+  "const struct SpriteDescriptor %s = {\n"				\
+  "  .name = \"%s\",\n"							\
+  "\n"									\
+  "  /* Float coordinates (0.0-1.0) */\n"				\
+  "  .fLeft = %f,\n"							\
+  "  .fTop = %f,\n"							\
+  "  .fRight = %f,\n"							\
+  "  .fBottom = %f,\n"							\
+  "  .fWidth = %f,\n"							\
+  "  .fHeight = %f,\n"							\
+  "\n"									\
+  "  /* Integer coordinates (Pixel position) */\n"			\
+  "  .iLeft = %d,\n"							\
+  "  .iTop = %d,\n"							\
+  "  .iRight = %d,\n"							\
+  "  .iBottom = %d,\n"							\
+  "  .iWidth = %d,\n"							\
+  "  .iHeight = %d,\n"							\
+  "};\n\n"
+
+
+#define SPRITE_DESC_FMT_HFILE "static "SPRITE_DESC_FMT_CFILE
+
+
+
 
 
 /*
@@ -78,8 +108,28 @@ static void drawNode(int level, Atlas::Node *node, void *param)
   SDL_BlitSurface(image->getSurface(), NULL, surface, &rect);
 }
 
-struct OutputFiles {
+class Dimension {
+public:
+
+  Dimension(int w, int h) {
+    mWidth = w;
+    mHeight = h;
+  }
+
+  int mWidth, mHeight;
+};
+
+enum OutFmt {
+  OutFmtPixels,
+  OutFmtFloats,
+};
+
+struct OutputParams {
+  enum OutFmt fmt;
+  Dimension *dimension;
+#ifdef USE_CFILE
   FILE *cFile;
+#endif
   FILE *hFile;
 };
 
@@ -94,43 +144,44 @@ static void strtoupper(char *destStr, int destStrSize, const char *str)
   destStr[i] = '\0';
 }
 
-static int add_file_headers(struct OutputFiles *outputFiles, const char *atlasName)
+static int add_file_headers(struct OutputParams *outputParams, const char *atlasName)
 {
   char tmpStr[256];
 
   strtoupper(tmpStr, sizeof(tmpStr), atlasName);
-  fprintf(outputFiles->hFile, 
+  fprintf(outputParams->hFile, 
 	  "#ifndef _%s_H_\n"
 	  "#define _%s_H_\n"
 	  "\n\n"
 	  "#include \"SpriteDescriptor.h\"\n"
 	  "namespace %s {\n\n",
 	  tmpStr, tmpStr, atlasName);
-
-  fprintf(outputFiles->cFile, 
+#ifdef USE_CFILE
+  fprintf(outputParams->cFile, 
 	  "#include \"SpriteDescriptor.h\"\n"
 	  "#include \"%s.h\"\n\n"
 	  "namespace %s {\n\n", 
 	  atlasName, atlasName);
-
+#endif
 
   return 0;
 }
 
-static int add_file_footers(struct OutputFiles *outputFiles, const char *atlasName)
+static int add_file_footers(struct OutputParams *outputParams, const char *atlasName)
 {
   char tmpStr[256];
   strtoupper(tmpStr, sizeof(tmpStr), atlasName);
 
-  fprintf(outputFiles->hFile, 
+  fprintf(outputParams->hFile, 
 	  "\n"
 	  "}; /* end of namespace %s */\n\n"
 	  "\n\n#endif\n", atlasName);
 
-
-  fprintf(outputFiles->cFile, 
+#ifdef USE_CFILE
+  fprintf(outputParams->cFile, 
 	  "\n"
 	  "}; /* end of namespace %s */\n", atlasName);
+#endif
 
   return 0;
 }
@@ -138,7 +189,7 @@ static int add_file_footers(struct OutputFiles *outputFiles, const char *atlasNa
 
 static void storeIndex(int level, Atlas::Node *node, void *param)
 {
-  struct OutputFiles *outputFiles = (struct OutputFiles *)param;
+  struct OutputParams *outputParams = (struct OutputParams *)param;
   Image *image = (Image *)node->getRect();
 
   //  printf("Storeing node %s...\n", image->getName());
@@ -156,29 +207,45 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
   memcpy(tmpName, image->getName(), len);
   tmpName[len] = '\0';
 
-  fprintf(outputFiles->hFile, 
+#ifdef USE_CFILE
+  fprintf(outputParams->hFile, 
 	  "extern const struct SpriteDescriptor %s;\n", 
 	  tmpName);
-
-  fprintf(outputFiles->cFile, 
-	  "const struct SpriteDescriptor %s = {\n"
-	  "  \"%s\", %d, %d, %d, %d, %d, %d\n"
-	  "};\n",
-	  tmpName, 
-	  tmpName, 
-	  node->getLeft(), 
-	  node->getTop(), 
-	  node->getRight(), 
-	  node->getBottom(),
-	  node->getWidth(),
-	  node->getHeight());
-
-#if 0
-  fprintf(file, "%s={%d,%d,%d,%d};\n",
-	  tmpName, 
-	  node->getLeft(), node->getTop(), 
-	  node->getRight(), node->getBottom());
 #endif
+
+
+#ifdef USE_CFILE
+    fprintf(outputParams->hFile, SPRITE_DESC_FMT_CFILE,
+	    tmpName, tmpName, 
+	    ((float)node->getLeft()) / ((float)outputParams->dimension->mWidth), 
+	    ((float)node->getTop()) / ((float)outputParams->dimension->mHeight), 
+	    ((float)node->getRight()) / ((float)outputParams->dimension->mWidth), 
+	    ((float)node->getBottom()) / ((float)outputParams->dimension->mHeight),
+	    ((float)node->getWidth()) / ((float)outputParams->dimension->mWidth),
+	    ((float)node->getHeight()) / ((float)outputParams->dimension->mHeight),
+	    node->getLeft(),
+	    node->getTop(),
+	    node->getRight(),
+	    node->getBottom(),
+	    node->getWidth(),
+	    node->getHeight());
+#else
+    fprintf(outputParams->hFile, SPRITE_DESC_FMT_HFILE,
+	    tmpName, tmpName, 
+	    ((float)node->getLeft()) / ((float)outputParams->dimension->mWidth), 
+	    ((float)node->getTop()) / ((float)outputParams->dimension->mHeight), 
+	    ((float)node->getRight()) / ((float)outputParams->dimension->mWidth), 
+	    ((float)node->getBottom()) / ((float)outputParams->dimension->mHeight),
+	    ((float)node->getWidth()) / ((float)outputParams->dimension->mWidth),
+	    ((float)node->getHeight()) / ((float)outputParams->dimension->mHeight),
+	    node->getLeft(),
+	    node->getTop(),
+	    node->getRight(),
+	    node->getBottom(),
+	    node->getWidth(),
+	    node->getHeight());
+#endif
+
 }
 
 
@@ -212,19 +279,6 @@ static Atlas::Node* tryCreate(int w, int h, std::list<Image *> &imageList)
 
   return root;
 }
-
-
-class Dimension {
-public:
-
-  Dimension(int w, int h) {
-    mWidth = w;
-    mHeight = h;
-  }
-
-  int mWidth, mHeight;
-};
-
 
 
 static int cmdLineParse(int argc, char *argv[], 
@@ -412,7 +466,10 @@ int main(int argc, char *argv[])
 	  
 	/* Create the atlas indexing files (c and header) */
 	FILE *spriteDescriptorFile;
-	struct OutputFiles outputFiles;
+	struct OutputParams outputParams;
+	outputParams.dimension = bestDimension;
+
+	outputParams.fmt = OutFmtFloats;
 
 	spriteDescriptorFile = fopen("SpriteDescriptor.h", "wb");
 	if (spriteDescriptorFile) {
@@ -423,11 +480,14 @@ int main(int argc, char *argv[])
 		  "struct SpriteDescriptor {\n\n"
 		  "  /* Sprite Name (from file) */\n"
 		  "  const char *name;\n\n"
-
-		  "  /* Sprite Coordinates */\n"
-		  "  int left, top, rigth, bottom;\n\n"
-		  "  /* Sprite Size */\n"
-		  "  int width, height;\n"
+		  "  /* Sprite Coordinates (in floats, range 0.0-1.0) */\n"
+		  "  float fLeft, fTop, fRight, fBottom;\n\n"
+		  "  /* Sprite Size (floats) */\n"
+		  "  float fWidth, fHeight;\n\n"
+		  "  /* Sprite Coordinates (in integers) */\n"
+		  "  int iLeft, iTop, iRight, iBottom;\n\n"
+		  "  /* Sprite Size (integers) */\n"
+		  "  int iWidth, iHeight;\n"
 		  "};\n\n"
 		  "#endif\n");
 
@@ -439,33 +499,36 @@ int main(int argc, char *argv[])
 	}
 
 	sprintf(tmpname, "%s.h", atlasname);
-	outputFiles.hFile = fopen(tmpname, "wb");
-	if (!outputFiles.hFile) {
+	outputParams.hFile = fopen(tmpname, "wb");
+	if (!outputParams.hFile) {
 	  printf("Failed to create index file (%s): %s\n", 
 		 tmpname, strerror(errno));
 	  err = -1;
 	}
+#ifdef USE_CFILE
 	else {
 	  sprintf(tmpname, "%s.cpp", atlasname);
-	  outputFiles.cFile = fopen(tmpname, "wb");
-	  if (!outputFiles.cFile) {
+	  outputParams.cFile = fopen(tmpname, "wb");
+	  if (!outputParams.cFile) {
 	    printf("Failed to create index file (%s): %s\n", 
 		   tmpname, strerror(errno));
-	    fclose(outputFiles.hFile);
+	    fclose(outputParams.hFile);
 	    err = -1;
 	  }
 	}
-
+#endif
 	    
 	if (!err) {
-	  add_file_headers(&outputFiles, atlasname);
+	  add_file_headers(&outputParams, atlasname);
 
-	  bestRoot->poTraversal(0, storeIndex, &outputFiles);
+	  bestRoot->poTraversal(0, storeIndex, &outputParams);
 
-	  add_file_footers(&outputFiles, atlasname);
+	  add_file_footers(&outputParams, atlasname);
 
-	  fclose(outputFiles.cFile);
-	  fclose(outputFiles.hFile);
+#ifdef USE_CFILE
+	  fclose(outputParams.cFile);
+#endif
+	  fclose(outputParams.hFile);
 
 	  printf("Successfully created atlas index file (%s)\n", tmpname);
 	}
