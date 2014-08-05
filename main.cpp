@@ -13,7 +13,7 @@
 #include "savepng.h"
 
 
-//#define USE_CFILE
+#define USE_CFILE
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
 const uint32_t rmask = 0xff000000;
@@ -28,26 +28,22 @@ const uint32_t amask = 0xff000000;
 #endif
 
 
+extern char _binary_res_SpriteDescriptor_h_start;
+extern char _binary_res_SpriteDescriptor_h_end;
+
 #define SPRITE_DESC_FMT_CFILE						\
-  "const struct SpriteDescriptor %s = {\n"				\
-  "  .name = \"%s\",\n"							\
+  "  {\n"								\
+  "    .offset = %d,\n"							\
+  "    .name = \"%s\",\n"						\
   "\n"									\
-  "  /* Float coordinates (0.0-1.0) */\n"				\
-  "  .fLeft = %f,\n"							\
-  "  .fTop = %f,\n"							\
-  "  .fRight = %f,\n"							\
-  "  .fBottom = %f,\n"							\
-  "  .fWidth = %f,\n"							\
-  "  .fHeight = %f,\n"							\
-  "\n"									\
-  "  /* Integer coordinates (Pixel position) */\n"			\
-  "  .iLeft = %d,\n"							\
-  "  .iTop = %d,\n"							\
-  "  .iRight = %d,\n"							\
-  "  .iBottom = %d,\n"							\
-  "  .iWidth = %d,\n"							\
-  "  .iHeight = %d,\n"							\
-  "};\n\n"
+  "    /* Integer coordinates (Pixel position) */\n"			\
+  "    .left = %d,\n"							\
+  "    .top = %d,\n"							\
+  "    .right = %d,\n"							\
+  "    .bottom = %d,\n"							\
+  "    .width = %d,\n"							\
+  "    .height = %d,\n"							\
+  "  },\n"
 
 
 #define SPRITE_DESC_FMT_HFILE "static "SPRITE_DESC_FMT_CFILE
@@ -126,7 +122,9 @@ enum OutFmt {
 
 struct OutputParams {
   enum OutFmt fmt;
+  int indexOffset;
   Dimension *dimension;
+  const char *imageFileName;
 #ifdef USE_CFILE
   FILE *cFile;
 #endif
@@ -147,21 +145,34 @@ static void strtoupper(char *destStr, int destStrSize, const char *str)
 static int add_file_headers(struct OutputParams *outputParams, const char *atlasName)
 {
   char tmpStr[256];
-
   strtoupper(tmpStr, sizeof(tmpStr), atlasName);
   fprintf(outputParams->hFile, 
 	  "#ifndef _%s_H_\n"
 	  "#define _%s_H_\n"
-	  "\n\n"
+	  "\n"
 	  "#include \"SpriteDescriptor.h\"\n"
-	  "namespace %s {\n\n",
+	  "\n"
+	  "#ifdef __cplusplus\n"
+	  "extern \"C\" {\n"
+	  "#endif\n"
+	  "\n"
+	  "extern const struct SpriteMapDescriptor %s;\n",
 	  tmpStr, tmpStr, atlasName);
 #ifdef USE_CFILE
   fprintf(outputParams->cFile, 
 	  "#include \"SpriteDescriptor.h\"\n"
 	  "#include \"%s.h\"\n\n"
-	  "namespace %s {\n\n", 
-	  atlasName, atlasName);
+	  "const struct SpriteMapDescriptor %s = {\n"
+	  "  .name = \"%s\"\n"
+          "  .imageFileName = \"%s\"\n"
+	  "  .width = %d\n"
+	  "  .height = %d\n"
+	  "  .sprites = {\n",
+	  atlasName, atlasName, 
+	  atlasName,
+	  outputParams->imageFileName,
+	  outputParams->dimension->mWidth,
+	  outputParams->dimension->mHeight);
 #endif
 
   return 0;
@@ -174,13 +185,17 @@ static int add_file_footers(struct OutputParams *outputParams, const char *atlas
 
   fprintf(outputParams->hFile, 
 	  "\n"
-	  "}; /* end of namespace %s */\n\n"
-	  "\n\n#endif\n", atlasName);
+	  "#ifdef __cplusplus\n"
+	  "}\n"
+	  "#endif\n"
+	  "\n"
+	  "\n#endif\n");
 
 #ifdef USE_CFILE
   fprintf(outputParams->cFile, 
+	  "  }\n"
 	  "\n"
-	  "}; /* end of namespace %s */\n", atlasName);
+	  "}; /* end of %s */\n", atlasName);
 #endif
 
   return 0;
@@ -207,22 +222,10 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
   memcpy(tmpName, image->getName(), len);
   tmpName[len] = '\0';
 
-#ifdef USE_CFILE
-  fprintf(outputParams->hFile, 
-	  "extern const struct SpriteDescriptor %s;\n", 
-	  tmpName);
-#endif
-
 
 #ifdef USE_CFILE
-    fprintf(outputParams->hFile, SPRITE_DESC_FMT_CFILE,
-	    tmpName, tmpName, 
-	    ((float)node->getLeft()) / ((float)outputParams->dimension->mWidth), 
-	    ((float)node->getTop()) / ((float)outputParams->dimension->mHeight), 
-	    ((float)node->getRight()) / ((float)outputParams->dimension->mWidth), 
-	    ((float)node->getBottom()) / ((float)outputParams->dimension->mHeight),
-	    ((float)node->getWidth()) / ((float)outputParams->dimension->mWidth),
-	    ((float)node->getHeight()) / ((float)outputParams->dimension->mHeight),
+    fprintf(outputParams->cFile, SPRITE_DESC_FMT_CFILE,
+	    outputParams->indexOffset, tmpName, 
 	    node->getLeft(),
 	    node->getTop(),
 	    node->getRight(),
@@ -231,13 +234,7 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
 	    node->getHeight());
 #else
     fprintf(outputParams->hFile, SPRITE_DESC_FMT_HFILE,
-	    tmpName, tmpName, 
-	    ((float)node->getLeft()) / ((float)outputParams->dimension->mWidth), 
-	    ((float)node->getTop()) / ((float)outputParams->dimension->mHeight), 
-	    ((float)node->getRight()) / ((float)outputParams->dimension->mWidth), 
-	    ((float)node->getBottom()) / ((float)outputParams->dimension->mHeight),
-	    ((float)node->getWidth()) / ((float)outputParams->dimension->mWidth),
-	    ((float)node->getHeight()) / ((float)outputParams->dimension->mHeight),
+	    outputParams->indexOffset, tmpName, 
 	    node->getLeft(),
 	    node->getTop(),
 	    node->getRight(),
@@ -246,6 +243,7 @@ static void storeIndex(int level, Atlas::Node *node, void *param)
 	    node->getHeight());
 #endif
 
+    outputParams->indexOffset ++;
 }
 
 
@@ -456,62 +454,54 @@ int main(int argc, char *argv[])
 						   rmask, gmask, bmask, amask);
       SDL_FillRect(surface, NULL, SDL_MapRGBA(surface->format, 0x00, 0x00, 0x00, 0x00)); // 0x00ffffff);
       bestRoot->poTraversal(0, drawNode, surface);
-      char tmpname[sizeof(atlasname)+4];
-      sprintf(tmpname, "%s.png", atlasname);
-      err = PNG::save(surface, tmpname);
+      char imgFileName[sizeof(atlasname)+4];
+      char hFileName[sizeof(atlasname)+4];
+      char cFileName[sizeof(atlasname)+4];
+      const char *spriteDescriptorFileName = "SpriteDescriptor.h";
+      snprintf(imgFileName, sizeof(imgFileName), "%s.png", atlasname);
+      snprintf(hFileName, sizeof(hFileName), "%s.h", atlasname);
+      snprintf(cFileName, sizeof(cFileName), "%s.cpp", atlasname);
+      err = PNG::save(surface, imgFileName);
       if (!err) {
 	    
 
-	printf("Successfully created atlas image file (%s)\n", tmpname);
+	printf("Successfully created atlas image file (%s)\n", imgFileName);
 	  
 	/* Create the atlas indexing files (c and header) */
 	FILE *spriteDescriptorFile;
 	struct OutputParams outputParams;
+	outputParams.indexOffset = 0;
 	outputParams.dimension = bestDimension;
+	outputParams.imageFileName = imgFileName;
 
 	outputParams.fmt = OutFmtFloats;
 
-	spriteDescriptorFile = fopen("SpriteDescriptor.h", "wb");
+	spriteDescriptorFile = fopen(spriteDescriptorFileName, "wb");
 	if (spriteDescriptorFile) {
-	  fprintf(spriteDescriptorFile, 
-		  "#ifndef _SPRITE_DESCRIPTOR_H_\n"
-		  "#define _SPRITE_DESCRIPTOR_H_\n"
-		  "\n\n"
-		  "struct SpriteDescriptor {\n\n"
-		  "  /* Sprite Name (from file) */\n"
-		  "  const char *name;\n\n"
-		  "  /* Sprite Coordinates (in floats, range 0.0-1.0) */\n"
-		  "  float fLeft, fTop, fRight, fBottom;\n\n"
-		  "  /* Sprite Size (floats) */\n"
-		  "  float fWidth, fHeight;\n\n"
-		  "  /* Sprite Coordinates (in integers) */\n"
-		  "  int iLeft, iTop, iRight, iBottom;\n\n"
-		  "  /* Sprite Size (integers) */\n"
-		  "  int iWidth, iHeight;\n"
-		  "};\n\n"
-		  "#endif\n");
-
+	  char *p = &_binary_res_SpriteDescriptor_h_start;
+	  while (p < &_binary_res_SpriteDescriptor_h_end) {
+	    fputc(*p, spriteDescriptorFile);	    
+	    p ++;
+	  }
 	  fclose(spriteDescriptorFile);
+	  printf("Successfully created sprite descriptor header (%s)\n", spriteDescriptorFileName);
 	}
 	else {
-	  printf("Failed to create file (SpriteDescriptor.h): %s\n", 
-		 strerror(errno));
+	  printf("Failed to create sprite descriptor header (%s): %s\n", spriteDescriptorFileName, strerror(errno));
 	}
 
-	sprintf(tmpname, "%s.h", atlasname);
-	outputParams.hFile = fopen(tmpname, "wb");
+	outputParams.hFile = fopen(hFileName, "wb");
 	if (!outputParams.hFile) {
 	  printf("Failed to create index file (%s): %s\n", 
-		 tmpname, strerror(errno));
+		 hFileName, strerror(errno));
 	  err = -1;
 	}
 #ifdef USE_CFILE
 	else {
-	  sprintf(tmpname, "%s.cpp", atlasname);
-	  outputParams.cFile = fopen(tmpname, "wb");
+	  outputParams.cFile = fopen(cFileName, "wb");
 	  if (!outputParams.cFile) {
 	    printf("Failed to create index file (%s): %s\n", 
-		   tmpname, strerror(errno));
+		   cFileName, strerror(errno));
 	    fclose(outputParams.hFile);
 	    err = -1;
 	  }
@@ -525,12 +515,14 @@ int main(int argc, char *argv[])
 
 	  add_file_footers(&outputParams, atlasname);
 
+	  fclose(outputParams.hFile);
+	  printf("Successfully created atlas index file (%s)\n", hFileName);
+
 #ifdef USE_CFILE
 	  fclose(outputParams.cFile);
+	  printf("Successfully created atlas index file (%s)\n", cFileName);
 #endif
-	  fclose(outputParams.hFile);
 
-	  printf("Successfully created atlas index file (%s)\n", tmpname);
 	}
       }
     }
