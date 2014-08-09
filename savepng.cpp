@@ -1,8 +1,8 @@
-#include <stdlib.h>
-#include <string.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <png.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "savepng.h"
 
@@ -14,10 +14,9 @@ static int png_colortype_from_surface(SDL_Surface *surface)
     colortype |= PNG_COLOR_MASK_PALETTE;
   else if (surface->format->Amask)
     colortype |= PNG_COLOR_MASK_ALPHA;
-		
+
   return colortype;
 }
-
 
 void png_user_warn(png_structp ctx, png_const_charp str)
 {
@@ -31,10 +30,9 @@ void png_user_error(png_structp ctx, png_const_charp str)
   fprintf(stderr, "libpng: error: %s\n", str);
 }
 
-
 /*
  * png_save()
- * 
+ *
  * Save a SDL Surface as a png image file.
  * Returns 0 if successfully saved, else error.
  */
@@ -54,8 +52,8 @@ int PNG::save(SDL_Surface *surf, const char *filename)
   }
 
   /* Initializing png structures and callbacks */
-  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, 
-				    NULL, png_user_error, png_user_warn);
+  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, png_user_error,
+                                    png_user_warn);
   if (png_ptr == NULL) {
     printf("png_create_write_struct error!\n");
     return -1;
@@ -77,16 +75,17 @@ int PNG::save(SDL_Surface *surf, const char *filename)
   png_init_io(png_ptr, fp);
 
   colortype = png_colortype_from_surface(surf);
-  png_set_IHDR(png_ptr, info_ptr, surf->w, surf->h, 8, colortype,	PNG_INTERLACE_NONE, 
-	       PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+  png_set_IHDR(png_ptr, info_ptr, surf->w, surf->h, 8, colortype,
+               PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+               PNG_FILTER_TYPE_DEFAULT);
 
   /* Writing the image */
   png_write_info(png_ptr, info_ptr);
   png_set_packing(png_ptr);
 
-  row_pointers = (png_bytep*) malloc(sizeof(png_bytep)*surf->h);
+  row_pointers = (png_bytep *)malloc(sizeof(png_bytep) * surf->h);
   for (i = 0; i < surf->h; i++)
-    row_pointers[i] = (png_bytep)(Uint8 *)surf->pixels + i*surf->pitch;
+    row_pointers[i] = (png_bytep)(Uint8 *)surf->pixels + i * surf->pitch;
   png_write_image(png_ptr, row_pointers);
   png_write_end(png_ptr, info_ptr);
 
@@ -97,4 +96,3 @@ int PNG::save(SDL_Surface *surf, const char *filename)
 
   return 0;
 }
-

@@ -4,9 +4,10 @@
 
 using namespace Atlas;
 
-Node:: Node(int left, int top, int right, int bottom) {
+Node::Node(int left, int top, int right, int bottom)
+{
   static int idcnt = 0;
-  mId = idcnt ++;
+  mId = idcnt++;
   mLeft = left;
   mTop = top;
   mRight = right;
@@ -19,9 +20,9 @@ Node:: Node(int left, int top, int right, int bottom) {
   mRect = NULL;
 }
 
+Node *Node::insert(NodeRect *rect)
+{
 
-Node *Node::insert(NodeRect *rect) {
-    
   Node *newNode = NULL;
 
   int w = rect->getWidth();
@@ -36,16 +37,14 @@ Node *Node::insert(NodeRect *rect) {
       newNode = mChild[1]->insert(rect);
     }
 
-  }
-  else if (!mInUse) {
+  } else if (!mInUse) {
 
     if (w == getWidth() && h == getHeight()) {
       /* The given size fits perfectly */
       mRect = rect;
       newNode = this;
       mInUse = true;
-    }
-    else {
+    } else {
 
 #if 0
       /* Swap the width and height */
@@ -56,24 +55,22 @@ Node *Node::insert(NodeRect *rect) {
       }
 #endif
       if (w <= getWidth() && h <= getHeight()) {
-	/* Create new child nodes */
+        /* Create new child nodes */
 
-	mLeaf = false;
-	
-	int dw = getWidth() - w;
-	int dh = getHeight() - h;
+        mLeaf = false;
 
-	if (dw > dh) {
-	  mChild[0] = new Node(mLeft, mTop, mLeft + w, mBottom);
-	  mChild[1] = new Node(mLeft + w, mTop, mRight, mBottom);
-	}
-	else {
-	  mChild[0] = new Node(mLeft, mTop, mRight, mTop + h);
-	  mChild[1] = new Node(mLeft, mTop + h, mRight, mBottom);
-	}
+        int dw = getWidth() - w;
+        int dh = getHeight() - h;
 
-	newNode = mChild[0]->insert(rect);
+        if (dw > dh) {
+          mChild[0] = new Node(mLeft, mTop, mLeft + w, mBottom);
+          mChild[1] = new Node(mLeft + w, mTop, mRight, mBottom);
+        } else {
+          mChild[0] = new Node(mLeft, mTop, mRight, mTop + h);
+          mChild[1] = new Node(mLeft, mTop + h, mRight, mBottom);
+        }
 
+        newNode = mChild[0]->insert(rect);
       }
     }
   }
@@ -81,11 +78,10 @@ Node *Node::insert(NodeRect *rect) {
   return newNode;
 }
 
+void Node::poTraversal(int level, void (*callback)(int, Node *, void *),
+                       void *param)
+{
 
-void Node::poTraversal(int level, 
-		       void(*callback)(int, Node *, void *),
-		       void *param) {
-    
   if (mRect) {
     if (callback) {
       callback(level, this, param);
@@ -99,4 +95,3 @@ void Node::poTraversal(int level,
     mChild[1]->poTraversal(level + 1, callback, param);
   }
 }
-
