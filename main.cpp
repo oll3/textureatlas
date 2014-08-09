@@ -122,6 +122,7 @@ enum OutFmt {
 
 struct OutputParams {
   enum OutFmt fmt;
+  int numSprites;
   int indexOffset;
   Dimension *dimension;
   const char *imageFileName;
@@ -163,14 +164,16 @@ static int add_file_headers(struct OutputParams *outputParams, const char *atlas
 	  "#include \"SpriteDescriptor.h\"\n"
 	  "#include \"%s.h\"\n\n"
 	  "const struct SpriteMapDescriptor %s = {\n"
-	  "  .name = \"%s\"\n"
-          "  .imageFileName = \"%s\"\n"
+	  "  .name = \"%s\",\n"
+          "  .imageFileName = \"%s\",\n"
 	  "  .width = %d\n"
 	  "  .height = %d\n"
+	  "  .numSprites = %d\n"
 	  "  .sprites = {\n",
 	  atlasName, atlasName, 
 	  atlasName,
 	  outputParams->imageFileName,
+	  outputParams->numSprites,
 	  outputParams->dimension->mWidth,
 	  outputParams->dimension->mHeight);
 #endif
@@ -357,6 +360,7 @@ static int cmdLineParse(int argc, char *argv[],
 int main(int argc, char *argv[])
 {
   int err = 0;
+  int numSprites = 0;
   unsigned int seed = time(NULL);
   //  seed = 1343398170;
   printf("Generating images with seed %u\n", seed);
@@ -393,6 +397,7 @@ int main(int argc, char *argv[])
     for (it = imageList.begin(); it != imageList.end(); it ++) {
       Image *image = *it;
       numPixels += image->getWidth() * image->getHeight();
+      numSprites ++;
     }
 
 
@@ -473,7 +478,7 @@ int main(int argc, char *argv[])
 	outputParams.indexOffset = 0;
 	outputParams.dimension = bestDimension;
 	outputParams.imageFileName = imgFileName;
-
+	outputParams.numSprites = numSprites;
 	outputParams.fmt = OutFmtFloats;
 
 	spriteDescriptorFile = fopen(spriteDescriptorFileName, "wb");
